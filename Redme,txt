@@ -1,0 +1,4 @@
+if you found any Network please check the server
+if any rout is not defined please check the routes in App.jsx file and if you want to add any new Route , you have to make changes in App.jsx file .
+if you encountered an error Axios Error please also check the Api and the auth Api link is it working or not
+if Any announcement or celebrations are not getting fetched please check fetching  data from api in Leavereq.js file
