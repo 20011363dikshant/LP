@@ -1,5 +1,3 @@
-
-
 import express from 'express';
 import http from 'http';
 import { Server } from 'socket.io';
@@ -10,10 +8,10 @@ import bcrypt from 'bcrypt';
 import jwt from 'jsonwebtoken';
 import { createUser, checkEmailExists } from './models/UserSchema.js';
 import { v4 as uuidv4 } from 'uuid';
-import multer from 'multer';
-import fs from 'fs'; // Import the fs module to work with file system
-import path from 'path';
-import { fileURLToPath } from 'url';
+  import multer from 'multer';
+  import fs from 'fs'; // Import the fs module to work with file system
+  import path from 'path';
+  import { fileURLToPath } from 'url';
 
 const app = express();
 const server = http.createServer(app);
@@ -29,7 +27,7 @@ app.use(cors());
 app.use(bodyParser.json());
 
 // Global variable to store user details
-let globalUserDetails = {};
+let globalUserDetails = {}; 
 
 const pool = mysql.createPool({
   host: 'localhost',
@@ -44,15 +42,10 @@ const  JWT_SECRET_KEY = 'your_secret_key_here';
 // const localStorage = localStorage.setItem('token', token);
 
 
-
-
-
 // Sample route
 app.get('/', (req, res) => {
   res.send('Hello World!');
 });
-
-
 
 
 
@@ -72,20 +65,10 @@ app.post('/auth/check-email', async (req, res) => {
 
 
 
-
-
-
-
-// Create the uploads directory if it doesn't exist
-const uploadDirectory = './uploads';
-if (!fs.existsSync(uploadDirectory)){
-  fs.mkdirSync(uploadDirectory);
-}
-
 // Multer configuration
 const storage = multer.diskStorage({
   destination: function (req, file, cb) {
-    cb(null, 'uploads/'); // Destination folder for uploads
+    cb(null, './public/images/'); // Destination folder for uploads in backend
   },
   filename: function (req, file, cb) {
     const uniqueSuffix = Date.now() + '-' + Math.round(Math.random() * 1E9);
@@ -110,7 +93,7 @@ app.post('/auth/register', upload.single('profilePicture'), async (req, res) => 
     const hashedPassword = await bcrypt.hash(password, 10);
 
     // Save the profile picture path
-    const profilePicturePath = req.file ? req.file.path : null;
+    const profilePicturePath = req.file ? req.file.filename : null;
     console.log('Profile Picture Path:', profilePicturePath); // Log profile picture path
 
     // Check if email already exists in the database
@@ -131,8 +114,17 @@ app.post('/auth/register', upload.single('profilePicture'), async (req, res) => 
     await pool.query(insertQuery, [name, email, employeeID, number, hashedPassword, role, dob, gender, profilePicturePath, userId]);
     console.log('User inserted into database successfully'); // Log successful insertion
 
+        // Move the uploaded file to the public/images directory
+        if (profilePicturePath) {
+          const oldPath = path.join(__dirname, 'public', 'images', profilePicturePath);
+          const newPathBackend = path.join(__dirname, 'public', 'images', profilePicturePath);
+          const newPathFrontend = path.join(__dirname, '..', 'leaveportal', 'public', 'Images', profilePicturePath); // Destination path in frontend folder
+          fs.renameSync(oldPath, newPathBackend); // Move to backend folder
+          fs.copyFileSync(newPathBackend, newPathFrontend); // Copy to frontend folder
+        }
+        
     // Store the user details in global storage
-    const userDetails = { name, email, role, userId,profilePicturePath }; // Use variables directly
+    const userDetails = { name, email, role, userId, profilePicturePath }; // Use variables directly
     globalUserDetails[email] = userDetails;
 
     // Send success response
@@ -142,6 +134,7 @@ app.post('/auth/register', upload.single('profilePicture'), async (req, res) => 
     res.status(500).json({ error: 'Internal Server Error' });
   }
 });
+
 
 // Function to generate a unique userId
 function generateUserId() {
@@ -198,22 +191,10 @@ app.get('/api/profile-picture/:userId', (req, res) => {
 });
 
 
-
-
-
-
 // Endpoint to retrieve user details
 app.get('/api/user-details', (req, res) => {
   res.json(globalUserDetails);
 });
-
-
-
-
-
-
-
-
 
 
 // Login endpoint
@@ -432,10 +413,56 @@ if (userDetails && userDetails.userId){
 
 
 
-// Start server
-server.listen(PORT, () => {
-  console.log(`Server is running on port ${PORT}`);
+
+
+
+
+app.get('/api/user-profile-picture', async (req, res) => {
+  try {
+    // Assuming you have a users table with a column 'profile_picture_path'
+    const queryResult = await pool.query('SELECT profile_picture_path FROM users WHERE email = ?');
+    if (queryResult.rows.length > 0) {
+      const profilePicturePath = queryResult.rows[0].profile_picture_path;
+      res.json({ profilePicturePath });
+    } else {
+      res.status(404).json({ message: 'User not found' });
+    }
+  } catch (error) {
+    console.error('Error fetching profile picture:', error.message);
+    res.status(500).json({ message: 'Internal server error' });
+  }
 });
 
 
 
+// Route to handle profile picture upload
+app.post('/api/uploadProfilePicture', upload.single('profilePicture'), (req, res) => {
+  try {
+    // Retrieve the file path of the uploaded profile picture
+    const profilePicturePath = req.file.path;
+    
+    // Update the profile picture path in the database for the user
+    const userId = req.body.userId; // Assuming the user ID is sent in the request body
+    const updateQuery = 'UPDATE user SET profilePicturePath = ? WHERE userId = ?';
+    pool.query(updateQuery, [profilePicturePath, userId], (error, results) => {
+      if (error) {
+        console.error('Error updating profile picture path in database:', error);
+        return res.status(500).json({ error: 'Internal server error' });
+      }
+      console.log('Profile picture uploaded and database updated successfully');
+      res.status(200).json({ message: 'Profile picture uploaded successfully' });
+    });
+  } catch (error) {
+    console.error('Error uploading profile picture:', error);
+    res.status(500).json({ error: 'Internal server error' });
+  }
+});
+
+
+
+
+
+// Start server
+server.listen(PORT, () => {
+  console.log(`Server is running on port ${PORT}`);
+});
